@@ -1,35 +1,77 @@
 import express from "express";
-import { clients } from "../config/clients.js";
-import { buildPrompt } from "../services/aiPrompt.js";
-import { askAI } from "../services/aiAPI.js";
+import twilio from "twilio";
+
+// OPTIONAL AI IMPORT (safe fallback)
+let askAI = null;
+try {
+  const ai = await import("../services/aiAPI.js");
+  askAI = ai.askAI;
+} catch (e) {
+  console.log("AI disabled, running in voice-only mode");
+}
 
 const router = express.Router();
 
 router.post("/incoming", async (req, res) => {
-if (!req.body) {
-	    return res.status(400).json({ error: "Request body missing" });
-	      }
-	      
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const response = new VoiceResponse();
 
-  const { clientId, speechText } = req.body;
-if (!clientId || !speechText) {
-    return res.status(400).json({
-      error: "clientId and speechText are required"
-    });
+  // Step 1: Ask user to speak
+  const gather = response.gather({
+    input: "speech",
+    action: "/call/respond",
+    method: "POST",
+    timeout: 5,
+    speechTimeout: "auto",
+    language: "en-IN"
+  });
+
+  gather.say(
+    { voice: "alice", language: "en-IN" },
+    "Hello. Please ask your question after the beep."
+  );
+
+  // If no input
+  response.say(
+    { voice: "alice", language: "en-IN" },
+    "No response received. Goodbye."
+  );
+
+  res.type("text/xml");
+  res.send(response.toString());
+});
+
+// STEP 2: Handle user speech
+router.post("/respond", async (req, res) => {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const response = new VoiceResponse();
+
+  const userSpeech = req.body.SpeechResult || "";
+
+  let replyText = "";
+
+  if (!userSpeech) {
+    replyText = "I did not hear anything. Please try again later.";
+  } else if (askAI) {
+    try {
+      replyText = await askAI(userSpeech);
+    } catch (e) {
+      replyText = `You said: ${userSpeech}. AI is temporarily unavailable.`;
+    }
+  } else {
+    // SAFE FALLBACK (NO AI / NO INTERNET)
+    replyText = `You said: ${userSpeech}. This is test mode.`;
   }
 
-  const client = clients[clientId];
-  if (!client) {
-    return res.json({ reply: "Invalid business number" });
-  }
+  response.say(
+    { voice: "alice", language: "en-IN" },
+    replyText
+  );
 
-  const prompt = buildPrompt(client, speechText);
+  response.hangup();
 
-  // Later this will call Ollama
-  const reply = await askAI(speechText);
-  
-
-  res.json({ reply });
+  res.type("text/xml");
+  res.send(response.toString());
 });
 
 export default router;
