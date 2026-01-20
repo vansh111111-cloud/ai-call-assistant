@@ -16,33 +16,51 @@ async function askAI(question) {
           "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
           "HTTP-Referer": "http://localhost",
-          "X-Title": "AI Call Assistant"
+          "X-Title": "DorX Pizza Assistant"
         },
         body: JSON.stringify({
           model: "mistralai/mistral-7b-instruct",
           messages: [
             {
               role: "system",
-              content:
-                "You are a polite, friendly AI phone assistant. Speak clearly, briefly, and politely."
+              content: `
+You are a sweet, polite female voice assistant for "DorX Pizza".
+You help customers with menu, prices, offers, and location.
+Speak clearly, briefly, and friendly like a real restaurant staff.
+
+Restaurant details:
+Name: DorX Pizza
+Location: Noida Electronic City, Noida, Uttar Pradesh, India
+
+Menu:
+1. Margherita Pizza – Small ₹149, Medium ₹249, Large ₹349
+2. Farmhouse Pizza – Small ₹199, Medium ₹299, Large ₹399
+3. Paneer Tikka Pizza – Small ₹219, Medium ₹319, Large ₹429
+4. Veg Supreme Pizza – Small ₹239, Medium ₹349, Large ₹449
+5. Cheese Burst Add-on – ₹80 extra
+6. Garlic Bread – ₹129
+7. French Fries – ₹99
+8. Cold Drink – ₹49
+
+If user asks anything unrelated, politely guide them back to the menu.
+`
             },
             { role: "user", content: question }
           ],
-          temperature: 0.7
+          temperature: 0.6
         })
       }
     );
 
     const data = await response.json();
 
-    if (data.error || !data.choices) {
-      console.error("❌ OpenRouter error:", data);
-      return "Sorry, I am having trouble right now.";
+    if (!data.choices) {
+      return "Sorry, I am having some technical difficulty right now.";
     }
 
     return data.choices[0].message.content;
   } catch (err) {
-    console.error("❌ AI fetch failed:", err);
+    console.error("AI error:", err);
     return "Sorry, I am currently unavailable.";
   }
 }
@@ -55,37 +73,30 @@ router.post("/incoming", (req, res) => {
     input: "speech",
     action: "/twilio/respond",
     method: "POST",
-    timeout: 10,
+    timeout: 8,
     speechTimeout: "auto",
     language: "en-IN"
   });
 
   gather.say(
     { voice: "alice", language: "en-IN" },
-    "Hello. I am your AI assistant. Please ask your question."
+    "Hello! Welcome to DorX Pizza. How may I help you today?"
   );
-
-  // If user says nothing
-  twiml.say(
-    { voice: "alice", language: "en-IN" },
-    "I did not hear anything. Goodbye."
-  );
-  twiml.hangup();
 
   res.type("text/xml");
   res.send(twiml.toString());
 });
 
-/* ---------------- MAIN CONVERSATION LOOP ---------------- */
+/* ---------------- CONVERSATION LOOP ---------------- */
 router.post("/respond", async (req, res) => {
   const twiml = new VoiceResponse();
   const userSpeech = req.body.SpeechResult?.trim();
 
-  // If silence
+  // If user stays silent
   if (!userSpeech) {
     twiml.say(
       { voice: "alice", language: "en-IN" },
-      "It seems you are done. Thank you for calling. Goodbye."
+      "Thank you for calling DorX Pizza. Have a delicious day. Goodbye!"
     );
     twiml.hangup();
 
@@ -93,35 +104,29 @@ router.post("/respond", async (req, res) => {
     return res.send(twiml.toString());
   }
 
-  // AI response
+  // AI reply
   const aiReply = await askAI(userSpeech);
-
   twiml.say({ voice: "alice", language: "en-IN" }, aiReply);
 
-  // Short pause (natural feel)
+  // Natural pause
   twiml.pause({ length: 1 });
 
-  // Gather again (LOOP)
+  // LOOP AGAIN (IMPORTANT: LAST ACTION)
   const gather = twiml.gather({
     input: "speech",
     action: "/twilio/respond",
     method: "POST",
-    timeout: 10,
+    timeout: 8,
     speechTimeout: "auto",
     language: "en-IN"
   });
 
   gather.say(
     { voice: "alice", language: "en-IN" },
-    "You may ask another question."
+    "Would you like to order something else or know our location?"
   );
 
-  // If user stays silent again
-  twiml.say(
-    { voice: "alice", language: "en-IN" },
-    "No response received. Ending the call now. Goodbye."
-  );
-  twiml.hangup();
+  // ❌ NOTHING AFTER THIS (NO SAY, NO HANGUP)
 
   res.type("text/xml");
   res.send(twiml.toString());
