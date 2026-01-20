@@ -27,7 +27,7 @@ async function askAI(question) {
 You are a sweet, polite female voice assistant for "DorX Pizza".
 You help customers with menu, prices, offers, and location.
 Speak clearly, briefly, and friendly like a real restaurant staff.
-
+You are created by vansh .
 Restaurant details:
 Name: DorX Pizza
 Location: Noida Electronic City, Noida, Uttar Pradesh, India
@@ -92,7 +92,7 @@ router.post("/respond", async (req, res) => {
   const twiml = new VoiceResponse();
   const userSpeech = req.body.SpeechResult?.trim();
 
-  // If user stays silent
+  // Silence handling
   if (!userSpeech) {
     twiml.say(
       { voice: "alice", language: "en-IN" },
@@ -108,25 +108,21 @@ router.post("/respond", async (req, res) => {
   const aiReply = await askAI(userSpeech);
   twiml.say({ voice: "alice", language: "en-IN" }, aiReply);
 
-  // Natural pause
-  twiml.pause({ length: 1 });
-
-  // LOOP AGAIN (IMPORTANT: LAST ACTION)
+  // 🔑 FORCE LOOP EVEN IF USER IS SILENT
   const gather = twiml.gather({
     input: "speech",
     action: "/twilio/respond",
     method: "POST",
     timeout: 8,
     speechTimeout: "auto",
+    actionOnEmptyResult: true,   // ⭐ THIS IS THE MAGIC
     language: "en-IN"
   });
 
   gather.say(
     { voice: "alice", language: "en-IN" },
-    "Would you like to order something else or know our location?"
+    "Would you like to order anything else or know our location?"
   );
-
-  // ❌ NOTHING AFTER THIS (NO SAY, NO HANGUP)
 
   res.type("text/xml");
   res.send(twiml.toString());
