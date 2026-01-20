@@ -11,8 +11,8 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 // Mount the call route
-app.use("/call", callRoute);
-app.use("/twilio", twilioRoute);
+app.use("/twilio", callRoute);
+app.use("/call", twilioRoute);
 
 // Health check route (optional but recommended for Render)
 app.get("/", (req, res) => {
