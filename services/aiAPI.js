@@ -1,33 +1,40 @@
-import 'dotenv/config';
-import fetch from "node-fetch"; // Termux Node may need this
 
-const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+import fetch from "node-fetch";
 
 export async function askAI(prompt) {
   try {
-    const res = await fetch("https://api.openrouter.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openrouter‑gecko‑mini‑lm‑no‑internet‑preview‑20240302", 
-        messages: [
-          { role: "system", content: "You are a friendly restaurant assistant." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7
-      })
-    });
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "http://localhost",   // REQUIRED by OpenRouter
+          "X-Title": "AI Call Assistant"        // REQUIRED by OpenRouter
+        },
+        body: JSON.stringify({
+          model: "mistralai/mistral-7b-instruct", // Updated working model
+          messages: [
+            { role: "system", content: "You are a friendly restaurant assistant." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7
+        })
+      }
+    );
 
-    const data = await res.json();
+    const data = await response.json();
 
-    // If the API returns data differently use console to inspect structure
-    return data.choices?.[0]?.message?.content ?? "Sorry, no reply from API.";
+    if (data.error) {
+      console.error("❌ OpenRouter error:", data);
+      return "Sorry, AI is temporarily unavailable.";
+    }
+
+    return data.choices[0].message.content ?? "Sorry, no reply from AI.";
 
   } catch (err) {
-    console.error("OpenRouter API error:", err);
-    return "Sorry, AI is currently unavailable.";
+    console.error("❌ Fetch failed:", err);
+    return "AI error";
   }
 }
